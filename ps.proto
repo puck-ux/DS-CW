@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package ps;
+
+// creates parameters for rpcs in the format *rpc [name][function] returns [function]*
+service ParameterServer {
+    rpc Push (PushRequest) returns (PushResponse);
+    rpc Pull (PullRequest) returns (PullResponse);
+}
+
+message PushRequest {
+    repeated uint64 keys = 1;
+    repeated double grads = 2;
+}
+
+message PushResponse {}
+
+message PullRequest {
+    repeated uint64 keys = 1;
+}
+
+message PullResponse {
+    repeated double weights = 1;
+}
