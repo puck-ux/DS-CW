@@ -8,7 +8,7 @@ import numpy as np
 import ps_pb2
 import ps_pb2_grpc
 
-from config import NUM_KEYS, LR, PORT
+from config import NUM_KEYS, LR
 
 
 class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
