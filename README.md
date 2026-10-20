@@ -1,1 +1,1 @@
-Hello :D
+pip install grpcio grpcio-tools
