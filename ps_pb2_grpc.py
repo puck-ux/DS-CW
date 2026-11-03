@@ -5,7 +5,7 @@ import warnings
 
 import ps_pb2 as ps__pb2
 
-GRPC_GENERATED_VERSION = '1.84.0'
+GRPC_GENERATED_VERSION = '1.85.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -26,7 +26,7 @@ if _version_not_supported:
 
 
 class ParameterServerStub:
-    """creates parameters for rpcs in the format *rpc [name][function] returns [function]*
+    """The asynchronous parameter server service
     """
 
     def __init__(self, channel):
@@ -38,17 +38,22 @@ class ParameterServerStub:
         self.Push = channel.unary_unary(
                 '/ps.ParameterServer/Push',
                 request_serializer=ps__pb2.PushRequest.SerializeToString,
-                response_deserializer=ps__pb2.PushResponse.FromString,
+                response_deserializer=ps__pb2.TaskHandle.FromString,
                 _registered_method=True)
         self.Pull = channel.unary_unary(
                 '/ps.ParameterServer/Pull',
                 request_serializer=ps__pb2.PullRequest.SerializeToString,
-                response_deserializer=ps__pb2.PullResponse.FromString,
+                response_deserializer=ps__pb2.TaskHandle.FromString,
+                _registered_method=True)
+        self.Wait = channel.unary_unary(
+                '/ps.ParameterServer/Wait',
+                request_serializer=ps__pb2.TaskHandle.SerializeToString,
+                response_deserializer=ps__pb2.WaitResponse.FromString,
                 _registered_method=True)
 
 
 class ParameterServerServicer:
-    """creates parameters for rpcs in the format *rpc [name][function] returns [function]*
+    """The asynchronous parameter server service
     """
 
     def Push(self, request, context):
@@ -63,18 +68,30 @@ class ParameterServerServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Wait(self, request, context):
+        """Block caller thread until specific handle is ready
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ParameterServerServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'Push': grpc.unary_unary_rpc_method_handler(
                     servicer.Push,
                     request_deserializer=ps__pb2.PushRequest.FromString,
-                    response_serializer=ps__pb2.PushResponse.SerializeToString,
+                    response_serializer=ps__pb2.TaskHandle.SerializeToString,
             ),
             'Pull': grpc.unary_unary_rpc_method_handler(
                     servicer.Pull,
                     request_deserializer=ps__pb2.PullRequest.FromString,
-                    response_serializer=ps__pb2.PullResponse.SerializeToString,
+                    response_serializer=ps__pb2.TaskHandle.SerializeToString,
+            ),
+            'Wait': grpc.unary_unary_rpc_method_handler(
+                    servicer.Wait,
+                    request_deserializer=ps__pb2.TaskHandle.FromString,
+                    response_serializer=ps__pb2.WaitResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -85,7 +102,7 @@ def add_ParameterServerServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ParameterServer:
-    """creates parameters for rpcs in the format *rpc [name][function] returns [function]*
+    """The asynchronous parameter server service
     """
 
     @staticmethod
@@ -104,7 +121,7 @@ class ParameterServer:
             target,
             '/ps.ParameterServer/Push',
             ps__pb2.PushRequest.SerializeToString,
-            ps__pb2.PushResponse.FromString,
+            ps__pb2.TaskHandle.FromString,
             options,
             channel_credentials,
             insecure,
@@ -131,7 +148,34 @@ class ParameterServer:
             target,
             '/ps.ParameterServer/Pull',
             ps__pb2.PullRequest.SerializeToString,
-            ps__pb2.PullResponse.FromString,
+            ps__pb2.TaskHandle.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Wait(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ps.ParameterServer/Wait',
+            ps__pb2.TaskHandle.SerializeToString,
+            ps__pb2.WaitResponse.FromString,
             options,
             channel_credentials,
             insecure,

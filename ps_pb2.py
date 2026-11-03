@@ -24,21 +24,23 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08ps.proto\x12\x02ps\"*\n\x0bPushRequest\x12\x0c\n\x04keys\x18\x01 \x03(\x04\x12\r\n\x05grads\x18\x02 \x03(\x01\"\x0e\n\x0cPushResponse\"\x1b\n\x0bPullRequest\x12\x0c\n\x04keys\x18\x01 \x03(\x04\"\x1f\n\x0cPullResponse\x12\x0f\n\x07weights\x18\x01 \x03(\x01\x32g\n\x0fParameterServer\x12)\n\x04Push\x12\x0f.ps.PushRequest\x1a\x10.ps.PushResponse\x12)\n\x04Pull\x12\x0f.ps.PullRequest\x1a\x10.ps.PullResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08ps.proto\x12\x02ps\"-\n\x08KeyRange\x12\x11\n\tstart_idx\x18\x01 \x01(\x04\x12\x0e\n\x06length\x18\x02 \x01(\x04\"\\\n\x0bPushRequest\x12\x1b\n\x05range\x18\x01 \x01(\x0b\x32\x0c.ps.KeyRange\x12\x13\n\x0bsparse_keys\x18\x02 \x03(\x04\x12\r\n\x05grads\x18\x03 \x03(\x01\x12\x0c\n\x04\x64\x65ps\x18\x04 \x03(\x03\"?\n\x0bPullRequest\x12\x1b\n\x05range\x18\x01 \x01(\x0b\x32\x0c.ps.KeyRange\x12\x13\n\x0bsparse_keys\x18\x02 \x03(\x04\"\x1f\n\nTaskHandle\x12\x11\n\thandle_id\x18\x01 \x01(\x03\"\x1f\n\x0cWaitResponse\x12\x0f\n\x07weights\x18\x01 \x03(\x01\x32\x8d\x01\n\x0fParameterServer\x12\'\n\x04Push\x12\x0f.ps.PushRequest\x1a\x0e.ps.TaskHandle\x12\'\n\x04Pull\x12\x0f.ps.PullRequest\x1a\x0e.ps.TaskHandle\x12(\n\x04Wait\x12\x0e.ps.TaskHandle\x1a\x10.ps.WaitResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ps_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_PUSHREQUEST']._serialized_start=16
-  _globals['_PUSHREQUEST']._serialized_end=58
-  _globals['_PUSHRESPONSE']._serialized_start=60
-  _globals['_PUSHRESPONSE']._serialized_end=74
-  _globals['_PULLREQUEST']._serialized_start=76
-  _globals['_PULLREQUEST']._serialized_end=103
-  _globals['_PULLRESPONSE']._serialized_start=105
-  _globals['_PULLRESPONSE']._serialized_end=136
-  _globals['_PARAMETERSERVER']._serialized_start=138
-  _globals['_PARAMETERSERVER']._serialized_end=241
+  _globals['_KEYRANGE']._serialized_start=16
+  _globals['_KEYRANGE']._serialized_end=61
+  _globals['_PUSHREQUEST']._serialized_start=63
+  _globals['_PUSHREQUEST']._serialized_end=155
+  _globals['_PULLREQUEST']._serialized_start=157
+  _globals['_PULLREQUEST']._serialized_end=220
+  _globals['_TASKHANDLE']._serialized_start=222
+  _globals['_TASKHANDLE']._serialized_end=253
+  _globals['_WAITRESPONSE']._serialized_start=255
+  _globals['_WAITRESPONSE']._serialized_end=286
+  _globals['_PARAMETERSERVER']._serialized_start=289
+  _globals['_PARAMETERSERVER']._serialized_end=430
 # @@protoc_insertion_point(module_scope)

@@ -2,23 +2,35 @@ syntax = "proto3";
 
 package ps;
 
-// creates parameters for rpcs in the format *rpc [name][function] returns [function]*
+// The asynchronous parameter server service
 service ParameterServer {
-    rpc Push (PushRequest) returns (PushResponse);
-    rpc Pull (PullRequest) returns (PullResponse);
+    rpc Push (PushRequest) returns (TaskHandle);
+    rpc Pull (PullRequest) returns (TaskHandle);
+    rpc Wait (TaskHandle) returns (WaitResponse); // Block caller thread until specific handle is ready
+}
+
+// A contiguous segment of the weight vector
+message KeyRange {
+    uint64 start_idx = 1;
+    uint64 length = 2;
 }
 
 message PushRequest {
-    repeated uint64 keys = 1;
-    repeated double grads = 2;
+    KeyRange range = 1;          
+    repeated uint64 sparse_keys = 2; 
+    repeated double grads = 3;
+    repeated int64 deps = 4; // Part A3: List of prior Task Handle IDs this push must wait for
 }
-
-message PushResponse {}
 
 message PullRequest {
-    repeated uint64 keys = 1;
+    KeyRange range = 1;
+    repeated uint64 sparse_keys = 2;
 }
 
-message PullResponse {
-    repeated double weights = 1;
+message TaskHandle {
+    int64 handle_id = 1; // Id used to track task dependencies and waiting
+}
+
+message WaitResponse {
+    repeated double weights = 1; // Filled ONLY if the completed task was a Pull
 }
