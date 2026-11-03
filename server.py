@@ -52,22 +52,28 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
  
     def Pull(self, request, context):
         if request.sparse_keys:
+            if max(request.sparse_keys) >= NUM_KEYS:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Keys must be between 0 and {NUM_KEYS - 1}")
             keys = np.array(request.sparse_keys, dtype=np.int64)
         else:
             start = request.range.start_idx
             length = request.range.length
+            if start + length > NUM_KEYS:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Range [{start}, {start + length}) exceeds the {NUM_KEYS} available keys")
             keys = np.arange(start, start + length, dtype=np.int64)
-            
+
         with self.lock:
             weights_snapshot = self.w[keys].tolist()
             task_handle = self._create_task_handle(task_type="pull", data=weights_snapshot, keys=keys.copy())
-            
+
         return task_handle
     
     
     def Wait(self, request, context):
         handle_id = request.handle_id
-        if handle_id not in self.tasks: return ps_pb2.WaitResponse()
+        # error handling
+        if handle_id not in self.tasks: 
+             context.abort(grpc.StatusCode.NOT_FOUND, f"Unknown task handle {handle_id}")
         task_info = self.tasks[handle_id]
         returned_weights = []
         if task_info["type"] == "pull": returned_weights = task_info["data"] # Return weights only for pull tasks
