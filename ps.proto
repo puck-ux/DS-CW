@@ -25,6 +25,7 @@ message PushRequest {
 message PullRequest {
     KeyRange range = 1;
     repeated uint64 sparse_keys = 2;
+    repeated int64 deps = 3;
 }
 
 message TaskHandle {
