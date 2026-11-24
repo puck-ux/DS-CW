@@ -8,7 +8,7 @@ import numpy as np
 import ps_pb2
 import ps_pb2_grpc
 
-from config import NUM_KEYS, LR
+from config import DEFAULT_PORT, NUM_KEYS, LR, SERVER_THREADS
 
 class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
     def __init__(self):
@@ -18,7 +18,7 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
         # Part A1: Asynchronous Task Management
         self.task_handle_counter = 0
         self.tasks = {}  # # Maps handle IDs to task information (type, data, keys, done, error)
-        self.task_executor = futures.ThreadPoolExecutor(max_workers=10) # Executes submitted tasks in background threads
+        self.task_executor = futures.ThreadPoolExecutor(max_workers=SERVER_THREADS) # Executes submitted tasks in background threads
         
         
     def _create_task_handle(self, task_type, keys=None):
@@ -154,11 +154,11 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
     
 
 # function to start the server
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+def serve(port=DEFAULT_PORT):
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=SERVER_THREADS))
     ps_pb2_grpc.add_ParameterServerServicer_to_server(ParameterServerServicer(), server)
-    server.add_insecure_port('[::]:8000')
-    print("Server starts on port 8000")
+    server.add_insecure_port(f"[::]:{port}")
+    print(f"Server starts on port {port}")
     server.start()
     server.wait_for_termination()
 

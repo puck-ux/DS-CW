@@ -1,0 +1,20 @@
+{
+  "address": "localhost:8000",
+  "seed": 42,
+  "workers": 4,
+  "iterations": 30,
+  "mode": "zipf",
+  "zipf_alpha": 1.2,
+  "zipf_sample_size": 25,
+  "compute_ms": 10.0,
+  "hetero_compute": true,
+  "straggler_fraction": 0.25,
+  "straggler_multiplier": 5.0,
+  "eval_every": 5,
+  "scenario": [
+    { "at_sec": 0.2, "action": "delay", "delay_ms": 15.0 },
+    { "at_sec": 0.5, "action": "delay", "delay_ms": 0.0 },
+    { "at_sec": 0.8, "action": "kill", "worker_id": 3 },
+    { "at_sec": 1.0, "action": "add" }
+  ]
+}

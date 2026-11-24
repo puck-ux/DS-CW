@@ -1,0 +1,12 @@
+{
+  "address": "localhost:8000",
+  "seed": 42,
+  "workers": 4,
+  "iterations": 30,
+  "mode": "full",
+  "compute_ms": 10.0,
+  "hetero_compute": false,
+  "straggler_fraction": 0.0,
+  "straggler_multiplier": 1.0,
+  "eval_every": 5
+}
