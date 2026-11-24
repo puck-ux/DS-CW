@@ -1,9 +1,7 @@
-import grpc
-import ps_pb2
-import ps_pb2_grpc
 import argparse
 import numpy as np
 
+from ps_client import PSClient
 from config import NUM_KEYS, STEPS, SEED
 
 # hidden target: same seed everywhere, so every worker agrees on it
@@ -25,7 +23,7 @@ def run():
             parser.error("Range must be within the available keys")
         print(f"Using Range Access: {start} to {start + length - 1}")
         keys = np.arange(start, start + length)
-        access = {"range": ps_pb2.KeyRange(start_idx=start,length=length)}
+        access = {"start": start, "length": length}
     else:
         if args.keys is None:
             keys = np.arange(NUM_KEYS)
@@ -37,26 +35,26 @@ def run():
             parser.error(f"Keys must be between 0 and {NUM_KEYS - 1}")
         if len(np.unique(keys)) != len(keys):
             parser.error("Duplicate keys are not allowed")
-        access = {"sparse_keys": keys.tolist()}
+        access = {"keys": keys}
     
     # channel to connect to the server - can be made remote
-    with grpc.insecure_channel('localhost:8000') as channel:
-        stub = ps_pb2_grpc.ParameterServerStub(channel)
+    with PSClient("localhost:8000") as ps:
         for _ in range(STEPS):
-            pull_handle = stub.Pull(ps_pb2.PullRequest(**access)) # Returns a tracking handle ID ticket immediately
-            wait_response = stub.Wait(pull_handle) # wait to resolve and unpack raw weights slice data payload
-            w = np.array(wait_response.weights)
-            grads = w - w_star[keys] # compute a gradient
-            push_handle = stub.Push(ps_pb2.PushRequest( # Asynchronous push request, returns handle ID immediately
-                grads=grads.tolist(), deps=[pull_handle.handle_id]))
-            stub.Wait(push_handle) # wait for the push to complete before next iteration
-            
-        final_pull = stub.Pull(ps_pb2.PullRequest(**access))
-        final_weights = np.array(stub.Wait(final_pull).weights)
+            pull_handle = ps.pull(**access)
+            w = ps.wait(pull_handle)
+            grads = w - w_star[keys]
+            push_handle = ps.push(grads, deps=[pull_handle])
+            ps.wait(push_handle)
+
+        final_pull = ps.pull(**access)
+        final_weights = ps.wait(final_pull)
+
         distance = np.linalg.norm(final_weights - w_star[keys])
         rmse = distance / np.sqrt(len(keys))
+
         print("Distance to target convergence:", distance)
         print("Average convergence error (RMSE):", rmse)
+
  
 if __name__ == "__main__":
     run()
