@@ -1,16 +1,12 @@
-"""Parameter server process. Run: python server.py"""
+"""Core parameter server implementation."""
 import threading
 from concurrent import futures
 
-import grpc
 import numpy as np
 
-import ps_pb2
-import ps_pb2_grpc
+from config import NUM_KEYS, LR, SERVER_THREADS
 
-from config import DEFAULT_PORT, NUM_KEYS, LR, SERVER_THREADS
-
-class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
+class ParameterServer:
     def __init__(self):
         self.w = np.zeros(NUM_KEYS)    # the model: one weight per key
         self.lock = threading.Lock()   # one request changes the weights at a time
@@ -32,7 +28,7 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
                 "done": threading.Event(),
                 "error": None
             }
-        return ps_pb2.TaskHandle(handle_id=next_task_handle_id)
+        return next_task_handle_id
     
     def _finish_task(self, handle_id, data=None, error=None):
         with self.lock:
@@ -40,6 +36,13 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
             task["data"] = data
             task["error"] = error
             task["done"].set()
+            
+    def _validate_dependencies(self, dependency_ids):
+        if len(set(dependency_ids)) != len(dependency_ids): raise ValueError("Duplicate dependency handles are not allowed")
+        with self.lock:
+            dependency_tasks = [self.tasks.get(dep_id) for dep_id in dependency_ids]
+        if any(task is None for task in dependency_tasks): raise ValueError("Invalid dependency handle")
+        return dependency_tasks
     
     def _execute_pull(self, handle_id, dependency_ids):
         try:
@@ -57,7 +60,7 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
             self._finish_task(handle_id, data=weights)
 
         except Exception as exc:
-            self._finish_task(handle_id,error=(grpc.StatusCode.INTERNAL, str(exc)))
+            self._finish_task(handle_id, error=exc)
             
             
     def _execute_push(self, handle_id, dependency_ids, pull_handle_id, grads):
@@ -76,91 +79,80 @@ class ParameterServerServicer(ps_pb2_grpc.ParameterServerServicer):
             self._finish_task(handle_id)
 
         except Exception as exc:
-            self._finish_task(handle_id,error=(grpc.StatusCode.INTERNAL, str(exc)))
+            self._finish_task(handle_id, error=exc)
+            
     
- 
-    def Push(self, request, context):
-        if not request.deps: context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Push requires at least one dependency")
-        if len(set(request.deps)) != len(request.deps): context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Duplicate dependency handles are not allowed")
-        with self.lock: dependency_tasks = [self.tasks.get(dep) for dep in request.deps]
-        if any(task is None for task in dependency_tasks):
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Invalid dependency handle")
+    def submit_pull(self, keys=None, start=None, length=None, deps=None):
+        dependency_ids = list(deps or [])
+        self._validate_dependencies(dependency_ids)
+
+        if keys is not None and (start is not None or length is not None):
+            raise ValueError("Provide either sparse keys or a range")
+
+        if keys is not None:
+            key_values = list(keys)
+            if any(int(k) != k or k < 0 or k >= NUM_KEYS for k in key_values):
+                raise ValueError(f"Keys must be between 0 and {NUM_KEYS - 1}")
+            selected_keys = np.array(key_values, dtype=np.int64)
+
+        elif start is not None and length is not None:
+            if start < 0 or length < 0 or start + length > NUM_KEYS:
+                raise ValueError(f"Invalid range [{start}, {start + length}) " f"for {NUM_KEYS} keys")
+            selected_keys = np.arange(start, start + length, dtype=np.int64)
+
+        elif start is None and length is None:
+            selected_keys = np.array([], dtype=np.int64)
+
+        else:
+            raise ValueError("Both start and length must be provided")
+
+        handle_id = self._create_task_handle("pull", selected_keys.copy())
+        self.task_executor.submit(
+            self._execute_pull,
+            handle_id,
+            dependency_ids
+        )
+        return handle_id
+    
+    
+    def submit_push(self, grads, deps):
+        dependency_ids = list(deps)
+        if not dependency_ids: raise ValueError("Push requires at least one dependency")
+        dependency_tasks = self._validate_dependencies(dependency_ids)
+        
         pull_dependencies = [
-            dep for dep, task in zip(request.deps, dependency_tasks)
+            dep_id
+            for dep_id, task in zip(dependency_ids, dependency_tasks)
             if task["type"] == "pull"
         ]
-        if len(pull_dependencies) != 1:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Push requires exactly one Pull dependency to identify its keys")
+        if len(pull_dependencies) != 1: raise ValueError("Push requires exactly one Pull dependency " "to identify its keys")
         pull_handle_id = pull_dependencies[0]
+        grads = np.asarray(grads, dtype=np.float64)
+        if grads.ndim != 1: raise ValueError("Gradients must be a one-dimensional array")
         pull_task = next(
-            task for dep, task in zip(request.deps, dependency_tasks)
-            if dep == pull_handle_id
+            task for dep_id, task in zip(dependency_ids, dependency_tasks)
+            if dep_id == pull_handle_id
         )
-        if len(request.grads) != len(pull_task["keys"]): context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Gradient count does not match the pulled keys")
-        grads = np.array(request.grads, dtype=np.float64)
-        task_handle = self._create_task_handle("push")
+        if len(grads) != len(pull_task["keys"]): raise ValueError("Gradient count does not match the pulled keys")
+        
+        handle_id = self._create_task_handle("push")
         self.task_executor.submit(
             self._execute_push,
-            task_handle.handle_id,
-            list(request.deps),
+            handle_id,
+            dependency_ids,
             pull_handle_id,
             grads
         )
-        return task_handle
-    
- 
-    def Pull(self, request, context):
-        # Validate dependencies
-        if len(set(request.deps)) != len(request.deps):
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Duplicate dependency handles are not allowed")
-        with self.lock: dependency_tasks = [self.tasks.get(dep) for dep in request.deps]
-        if any(task is None for task in dependency_tasks):
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT,"Invalid dependency handle")
-        
-        # Handle sparse keys or range selection
-        if request.sparse_keys:
-            if min(request.sparse_keys) < 0 or max(request.sparse_keys) >= NUM_KEYS:
-                context.abort(grpc.StatusCode.INVALID_ARGUMENT,f"Keys must be between 0 and {NUM_KEYS - 1}")
-            keys = np.array(request.sparse_keys, dtype=np.int64)
-        elif request.HasField("range"):
-            start = request.range.start_idx
-            length = request.range.length
-            if start > NUM_KEYS or start + length > NUM_KEYS:
-                context.abort(grpc.StatusCode.INVALID_ARGUMENT,f"Invalid range [{start}, {start + length}) for {NUM_KEYS} keys")
-            keys = np.arange(start, start + length, dtype=np.int64)
-        else:
-            keys = np.array([], dtype=np.int64) # No range or sparse keys: empty selection
-        task_handle = self._create_task_handle("pull", keys.copy())
-        self.task_executor.submit(
-            self._execute_pull,
-            task_handle.handle_id,
-            list(request.deps)
-        )
-        return task_handle
+        return handle_id
     
     
-    def Wait(self, request, context):
-        handle_id = request.handle_id
+    def wait_task(self, handle_id):
         with self.lock: task_info = self.tasks.get(handle_id)
-        if task_info is None: context.abort(grpc.StatusCode.NOT_FOUND,f"Unknown task handle {handle_id}")
-        task_info["done"].wait() # Block until the background task finishes        
+        if task_info is None: raise KeyError(f"Unknown task handle {handle_id}")
+        task_info["done"].wait()
         with self.lock:
             error = task_info["error"]
-            returned_weights = (task_info["data"] if task_info["type"] == "pull" else []) # Return weights only for pull tasks
-        if error:
-            status, message = error
-            context.abort(status, message)
-        return ps_pb2.WaitResponse(weights=returned_weights)
-    
-
-# function to start the server
-def serve(port=DEFAULT_PORT):
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=SERVER_THREADS))
-    ps_pb2_grpc.add_ParameterServerServicer_to_server(ParameterServerServicer(), server)
-    server.add_insecure_port(f"[::]:{port}")
-    print(f"Server starts on port {port}")
-    server.start()
-    server.wait_for_termination()
-
-if __name__ == "__main__":
-    serve()
+            data = task_info["data"]
+            task_type = task_info["type"]
+        if error: raise RuntimeError(f"Task {handle_id} failed: {error}") from error
+        return data if task_type == "pull" else None # Pull tasks return weights; Push tasks return None.
